@@ -120,6 +120,13 @@
       });
     }
 
+    setTimeout(() => {
+      new Notification('Meme Scanner is live!', {
+        body: 'Notifications are working — you will be alerted on new Solana tokens',
+        icon: 'https://dexscreener.com/favicon.ico'
+      });
+    }, 3000);
+
     Notification.requestPermission().then(permission => {
       if(permission === 'granted') {
         new Notification('Meme Scanner is live!', {
