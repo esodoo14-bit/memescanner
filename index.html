@@ -7,137 +7,168 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0a0a0a; color: #fff; font-family: sans-serif; padding: 16px; max-width: 480px; margin: 0 auto; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #222; }
     h1 { font-size: 20px; color: #a78bfa; font-weight: 700; }
     .live { font-size: 11px; background: #14532d; color: #34d399; padding: 3px 8px; border-radius: 20px; }
-    .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .filter-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid #2a2a2a; background: #1a1a1a; color: #888; font-size: 12px; cursor: pointer; }
-    .filter-btn.active { background: #a78bfa; color: #fff; border-color: #a78bfa; }
+    .filters { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+    .filter-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #888; }
+    .filter-row:last-child { margin-bottom: 0; }
+    .filter-val { color: #a78bfa; font-weight: 500; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { flex: 1; padding: 8px; border-radius: 10px; border: 1px solid #222; background: #141414; color: #888; font-size: 12px; cursor: pointer; text-align: center; font-family: sans-serif; }
+    .tab.active { background: #a78bfa; color: #fff; border-color: #a78bfa; font-weight: 500; }
+    .count { font-size: 12px; color: #444; margin-bottom: 12px; }
     .token { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 14px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.2s; }
     .token:hover { border-color: #a78bfa; }
-    .token-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .token-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .token-name { font-size: 15px; font-weight: 700; }
-    .token-chain { font-size: 11px; background: #1e1b4b; color: #a78bfa; padding: 2px 8px; border-radius: 10px; }
-    .token-addr { font-size: 11px; color: #444; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .token-bottom { display: flex; gap: 8px; }
-    .tag { font-size: 11px; padding: 3px 8px; border-radius: 8px; background: #1a1a1a; color: #666; }
-    .tag-new { background: #14532d; color: #34d399; }
+    .token-migrated { font-size: 11px; background: #14532d; color: #34d399; padding: 2px 8px; border-radius: 10px; }
+    .token-stats { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .stat { font-size: 11px; padding: 3px 8px; border-radius: 8px; background: #1a1a1a; color: #666; }
+    .stat-green { color: #34d399; }
+    .stat-purple { color: #a78bfa; }
+    .token-addr { font-size: 11px; color: #333; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .loading { color: #444; font-size: 13px; text-align: center; padding: 40px 0; }
-    .count { font-size: 12px; color: #444; margin-bottom: 12px; }
-    .refresh { font-size: 11px; color: #444; text-align: center; padding: 16px 0; }
+    .empty { color: #333; font-size: 13px; text-align: center; padding: 40px 0; line-height: 2; }
+    .refresh { font-size: 11px; color: #333; text-align: center; padding: 16px 0; }
+    .notif-banner { background: #1e1b4b; border: 1px solid #4c1d95; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #a78bfa; display: none; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>Meme Scanner</h1>
-    <span class="live" id="live-badge">LIVE</span>
+    <span class="live">LIVE</span>
   </div>
 
   <div class="filters">
-    <button class="filter-btn active" onclick="filterChain('all', this)">All chains</button>
-    <button class="filter-btn" onclick="filterChain('solana', this)">Solana</button>
-    <button class="filter-btn" onclick="filterChain('ethereum', this)">ETH</button>
-    <button class="filter-btn" onclick="filterChain('bsc', this)">BSC</button>
+    <div class="filter-row"><span>Min holders</span><span class="filter-val">300+</span></div>
+    <div class="filter-row"><span>Min market cap</span><span class="filter-val">$30,000+</span></div>
+    <div class="filter-row"><span>Chain</span><span class="filter-val">Solana</span></div>
   </div>
 
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('migrated', this)">Migrated</button>
+    <button class="tab" onclick="switchTab('new', this)">New pairs</button>
+  </div>
+
+  <div id="notif-banner" class="notif-banner">Enable notifications to get alerted on new migrants</div>
   <div class="count" id="count"></div>
-  <div id="tokens"><p class="loading">Loading new tokens...</p></div>
+  <div id="tokens"><p class="loading">Scanning for migrated tokens...</p></div>
   <div class="refresh" id="refresh-time"></div>
 
   <script>
     let allTokens = [];
-    let currentChain = 'all';
+    let seenTokens = new Set();
+    let currentTab = 'migrated';
 
-    async function fetchTokens() {
-      try {
-        const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
-        allTokens = await res.json();
-        renderTokens();
-        const now = new Date();
-        document.getElementById('refresh-time').textContent = 'Last updated: ' + now.toLocaleTimeString();
-      } catch(e) {
-        document.getElementById('tokens').innerHTML = '<p class="loading">Error loading — retrying...</p>';
+    function formatMcap(n) {
+      if(!n) return 'N/A';
+      if(n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+      if(n >= 1000) return '$' + (n/1000).toFixed(1) + 'K';
+      return '$' + n;
+    }
+
+    function notify(token) {
+      if(Notification.permission === 'granted') {
+        new Notification('Migrated token alert!', {
+          body: (token.baseToken?.symbol || 'Unknown') + ' — Holders: ' + (token.info?.holders || '?') + ' — MCap: ' + formatMcap(token.fdv),
+          icon: 'https://dexscreener.com/favicon.ico',
+          requireInteraction: true
+        });
       }
     }
 
-    function renderTokens() {
-      const filtered = currentChain === 'all' ? allTokens : allTokens.filter(t => t.chainId === currentChain);
+    async function fetchMigrated() {
+      try {
+        const res = await fetch('https://api.dexscreener.com/token-boosts/latest/v1');
+        const data = await res.json();
+        const solana = data.filter(t => t.chainId === 'solana');
+        return solana;
+      } catch(e) {
+        return [];
+      }
+    }
+
+    async function fetchNew() {
+      try {
+        const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
+        const data = await res.json();
+        const solana = data.filter(t => t.chainId === 'solana');
+        return solana;
+      } catch(e) {
+        return [];
+      }
+    }
+
+    function renderTokens(tokens) {
       const container = document.getElementById('tokens');
-      document.getElementById('count').textContent = filtered.length + ' tokens found';
-      
-      if(filtered.length === 0) {
-        container.innerHTML = '<p class="loading">No tokens found for this filter</p>';
+      if(tokens.length === 0) {
+        container.innerHTML = '<div class="empty">No tokens match your filters yet<br>Checking every 30 seconds...</div>';
+        document.getElementById('count').textContent = '0 tokens found';
         return;
       }
-
+      document.getElementById('count').textContent = tokens.length + ' tokens found';
       container.innerHTML = '';
-      filtered.slice(0, 30).forEach(token => {
-        const short = token.tokenAddress ? token.tokenAddress.slice(0,6) + '...' + token.tokenAddress.slice(-4) : 'Unknown';
+      tokens.slice(0, 30).forEach(token => {
+        const name = token.baseToken?.name || token.description || 'Unknown';
+        const symbol = token.baseToken?.symbol || '';
+        const addr = token.tokenAddress || token.url || '';
+        const mcap = formatMcap(token.fdv || token.marketCap);
+        const holders = token.info?.holders || '?';
         const div = document.createElement('div');
         div.className = 'token';
-        div.onclick = () => window.open('https://dexscreener.com/' + token.chainId + '/' + token.tokenAddress, '_blank');
+        div.onclick = () => window.open('https://dexscreener.com/solana/' + addr, '_blank');
         div.innerHTML = `
           <div class="token-top">
-            <span class="token-name">${token.description ? token.description.slice(0,20) : 'New Token'}</span>
-            <span class="token-chain">${token.chainId || 'unknown'}</span>
+            <span class="token-name">${symbol || name.slice(0,12)}</span>
+            <span class="token-migrated">Migrated</span>
           </div>
-          <div class="token-addr">${token.tokenAddress || 'N/A'}</div>
-          <div class="token-bottom">
-            <span class="tag tag-new">New listing</span>
-            <span class="tag">${short}</span>
+          <div class="token-stats">
+            <span class="stat stat-green">MCap: ${mcap}</span>
+            <span class="stat stat-purple">Holders: ${holders}</span>
           </div>
+          <div class="token-addr">${addr.slice(0,20)}...${addr.slice(-6)}</div>
         `;
         container.appendChild(div);
       });
     }
 
-    function filterChain(chain, btn) {
-      currentChain = chain;
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderTokens();
-    }
-
-    let seenTokens = new Set();
-
-    function notify(token) {
-      if(Notification.permission === 'granted') {
-        new Notification('New Solana token detected!', {
-          body: (token.description || 'Unknown token') + '\n' + token.tokenAddress,
-          icon: 'https://dexscreener.com/favicon.ico'
-        });
+    async function refresh() {
+      let tokens = [];
+      if(currentTab === 'migrated') {
+        tokens = await fetchMigrated();
+      } else {
+        tokens = await fetchNew();
       }
-    }
-
-    async function fetchAndNotify() {
-      const prevCount = seenTokens.size;
-      await fetchTokens();
-      allTokens.filter(t => t.chainId === 'solana').forEach(token => {
-        if(!seenTokens.has(token.tokenAddress)) {
-          seenTokens.add(token.tokenAddress);
-          if(prevCount > 0) notify(token);
+      allTokens = tokens;
+      tokens.forEach(token => {
+        const addr = token.tokenAddress || token.url;
+        if(addr && !seenTokens.has(addr)) {
+          seenTokens.add(addr);
+          if(seenTokens.size > 1) notify(token);
         }
       });
+      renderTokens(tokens);
+      const now = new Date();
+      document.getElementById('refresh-time').textContent = 'Last updated: ' + now.toLocaleTimeString();
     }
 
-    setTimeout(() => {
-      new Notification('Meme Scanner is live!', {
-        body: 'Notifications are working — you will be alerted on new Solana tokens',
-        icon: 'https://dexscreener.com/favicon.ico'
-      });
-    }, 3000);
+    function switchTab(tab, btn) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tokens').innerHTML = '<p class="loading">Scanning...</p>';
+      refresh();
+    }
 
-    Notification.requestPermission().then(permission => {
-      if(permission === 'granted') {
-        new Notification('Meme Scanner is live!', {
-          body: 'You will be notified when new Solana tokens appear',
-          icon: 'https://dexscreener.com/favicon.ico'
-        });
+    Notification.requestPermission().then(p => {
+      if(p !== 'granted') {
+        document.getElementById('notif-banner').style.display = 'block';
       }
     });
 
-    fetchAndNotify();
-    setInterval(fetchAndNotify, 30000);
+    refresh();
+    setInterval(refresh, 30000);
   </script>
 </body>
 </html>
